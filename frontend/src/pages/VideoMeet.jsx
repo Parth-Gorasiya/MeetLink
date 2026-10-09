@@ -54,51 +54,31 @@ export default function VideoMeet() {
 
   let [videos, setVideos] = useState([]);
 
-  const getPermissions = async () => {
+const getPermissions = async () => {
+    setScreenAvailable(
+        Boolean(navigator.mediaDevices?.getDisplayMedia)
+    );
+
     try {
-      const videoPermission = await navigator.mediaDevices.getUserMedia({
-        video: true,
-      });
-
-      if (videoPermission) {
-        setVideoAvailable(true);
-      } else {
-        setVideoAvailable(false);
-      }
-
-      const audioPermission = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-
-      if (audioPermission) {
-        setAudioAvailable(true);
-      } else {
-        setAudioAvailable(false);
-      }
-
-      if (navigator.mediaDevices.getDisplayMedia) {
-        setScreenAvailable(true);
-      } else {
-        setScreenAvailable(false);
-      }
-
-      if (videoAvailable || audioAvailable) {
-        const userMediaStream = await navigator.mediaDevices.getUserMedia({
-          video: videoAvailable,
-          audio: audioAvailable,
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
         });
 
-        if (userMediaStream) {
-          window.localStream = userMediaStream;
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = userMediaStream;
-          }
+        setVideoAvailable(true);
+        setAudioAvailable(true);
+
+        window.localStream = stream;
+
+        if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
         }
-      }
     } catch (error) {
-      console.log(error);
+        setVideoAvailable(false);
+        setAudioAvailable(false);
+        console.error("Camera/microphone access failed:", error);
     }
-  };
+};
 
   useEffect(() => {
     console.log("HELLO");
@@ -124,7 +104,7 @@ export default function VideoMeet() {
         connections[id]
           .setLocalDescription(description)
           .then(() => {
-            socketIdRef.current.emit(
+            socketRef.current.emit(
               "signal",
               id,
               JSON.stringify({ sdp: connections[id].localDescription }),
@@ -254,7 +234,16 @@ export default function VideoMeet() {
   };
 
   //TODO addMessage
-  let addMessage = () => {};
+  const addMessage = (data, sender, socketIdSender) => {
+    setMessages((previousMessages) => [
+        ...previousMessages,
+        { sender, data }
+    ]);
+
+    if (socketIdSender !== socketIdRef.current) {
+        setNewMessages((count) => count + 1);
+    }
+};
 
   let connectToSocketServer = () => {
     socketRef.current = io.connect(server_url, { secure: false });
@@ -269,7 +258,7 @@ export default function VideoMeet() {
       socketRef.current.on("chat-message", addMessage);
 
       socketRef.current.on("user-left", (id) => {
-        setVideo((videos) => videos.filter((video) => video.socketId !== id));
+        setVideos((videos) => videos.filter((video) => video.socketId !== id));
       });
 
       socketRef.current.on("user-joined", (id, clients) => {
@@ -360,6 +349,7 @@ export default function VideoMeet() {
     });
   };
 
+
   let getMedia = () => {
     setVideo(videoAvailable);
     setAudio(audioAvailable);
@@ -380,13 +370,86 @@ export default function VideoMeet() {
         // getUserMedia();
     }
 
+    let handleScreen = () => {
+        setScreen(!screen);
+    }
+
+    let sendMessage = () => {
+        socketRef.current.emit("chat-message", message, username);
+        setMessage("");
+    }
+
      let handleEndCall = () => {
         try {
-            let tracks = localVideoref.current.srcObject.getTracks()
+            let tracks = localVideoRef.current.srcObject.getTracks()
             tracks.forEach(track => track.stop())
         } catch (e) { }
         window.location.href = "/"
     }
+
+    let getDisplayMediaSuccess = (stream) => {
+        try {
+            window.localStream.getTracks().forEach(track => track.stop())
+        } catch (error) {
+            console.log(error);
+        }
+
+        window.localStream = stream;
+        localVideoRef.current.srcObject = stream;
+
+        for(let id in connections){
+            if(id === socketIdRef.current) continue;
+
+            connections[id].addStream(window.localStream)
+            connections[id].createOffer().then((description) => [
+                connections[id].setLocalDescription(description)
+                .then(()=> {
+                    socketRef.current.emit("signal", id, JSON.stringify({"sdp" : connections[id].localDescription}))
+                })
+                .catch( e => console.log(e))
+            ])
+        }
+        stream.getTracks().forEach(
+        (track) =>
+          (track.onended = () => {
+            setScreen(false);
+
+            try {
+              let tracks = localVideoRef.current.srcObject.getTracks();
+              tracks.forEach((track) => track.stop());
+            } catch (e) {
+              console.log(e);
+            }
+            //TODO BlackSilence
+            let blackSilence = (...args) =>
+              new MediaStream([black(...args), silence()]);
+
+            window.localStream = blackSilence();
+            localVideoRef.current.srcObject = window.localStream;
+
+            getUserMedia();
+
+
+     } ))
+    }
+    
+
+    let getDisplayMedia = () => {
+        if(screen){
+            if(navigator.mediaDevices.getDisplayMedia){
+                navigator.mediaDevices.getDisplayMedia({video: true, audio: true})
+                .then(getDisplayMediaSuccess)
+                .then((stream) => {})
+                .catch((e) => console.log(e));
+            }
+        }
+    }
+
+    useEffect(() => {
+        if(screen !== undefined){
+            getDisplayMedia();
+        }
+    }, [screen])
 
 
    return (
@@ -458,7 +521,7 @@ export default function VideoMeet() {
                                 {screen === true ? <ScreenShareIcon /> : <StopScreenShareIcon />}
                             </IconButton> : <></>}
 
-                        <Badge badgeContent={newMessages} max={999} color='orange'>
+                        <Badge badgeContent={newMessages} max={999} color='warning'>
                             <IconButton onClick={() => setModal(!showModal)} style={{ color: "white" }}>
                                 <ChatIcon />                        </IconButton>
                         </Badge>
