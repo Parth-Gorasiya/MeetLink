@@ -1,6 +1,7 @@
 import { User } from "../models/userModels.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import { Meeting } from "../models/meetingModel.js";
 
 const login = async (req, res) => {
     const { username, password } = req.body;
@@ -86,4 +87,69 @@ const register = async (req, res) => {
     }
 };
 
-export { login, register };
+const getUserHistory = async (req, res) => {
+    const { token } = req.query;
+
+    if (typeof token !== "string" || !token.trim()) {
+        return res.status(401).json({ message: "Token is required" });
+    }
+
+    try {
+        const user = await User.findOne({ token });
+
+        if (!user) {
+            return res.status(401).json({ message: "Invalid token" });
+        }
+
+        const meetings = await Meeting.find({
+            user_id: user.username,
+        });
+
+        return res.status(200).json(meetings);
+    } catch (error) {
+        console.error("Get history error:", error);
+        return res.status(500).json({
+            message: "Failed to fetch meeting history",
+        });
+    }
+};
+
+const addToHistory = async (req, res) => {
+    const { token, meeting_code } = req.body;
+
+    if (typeof token !== "string" || !token.trim()) {
+        return res.status(401).json({ message: "Token is required" });
+    }
+
+    if (typeof meeting_code !== "string" || !meeting_code.trim()) {
+        return res.status(400).json({
+            message: "Meeting code is required",
+        });
+    }
+
+    try {
+        const user = await User.findOne({ token });
+
+        if (!user) {
+            return res.status(401).json({ message: "Invalid token" });
+        }
+
+        const newMeeting = new Meeting({
+            user_id: user.username,
+            meetingCode: meeting_code.trim(),
+        });
+
+        await newMeeting.save();
+
+        return res.status(201).json({
+            message: "Added code to history",
+        });
+    } catch (error) {
+        console.error("Add history error:", error);
+        return res.status(500).json({
+            message: "Failed to save meeting history",
+        });
+    }
+};
+
+export { login, register, getUserHistory, addToHistory };
