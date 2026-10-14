@@ -1,6 +1,4 @@
 import "dotenv/config";
-
-import { Server } from "socket.io";
 import express from "express";
 import { createServer } from "node:http";
 import mongoose from "mongoose";
@@ -19,7 +17,11 @@ connectToSocket(server);
 const PORT = process.env.PORT || 8000;
 app.set("port", PORT);
 
-app.use(cors());
+// Express — app.js
+app.use(cors({
+    origin: process.env.FRONTEND_URL
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
