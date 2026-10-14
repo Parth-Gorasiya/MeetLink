@@ -51,21 +51,14 @@ export const AuthProvider = ({ children }) => {
         }
     }
 
-    const addToUserHistory = async (meetingCode) => {
-        try {
-             let request = await client.post("/add_to_activity", {
-                params: {
-                    token : localStorage.getItem("token"),
-                    meeting_code : meetingCode
-                }
-        } );
-        return request.data;
+   const addToUserHistory = async (meetingCode) => {
+    const response = await client.post("/add_to_activity", {
+        token: localStorage.getItem("token"),
+        meeting_code: meetingCode,
+    });
 
-     } catch (error) {
-            throw error;
-        }
-    }
-
+    return response.data;
+};
     const data = {
         userData,
         setUserData,
