@@ -12,7 +12,7 @@ import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
 import ChatIcon from "@mui/icons-material/Chat";
 import styles from "../styles/VideoComponent.module.css";
 
-const server_url = "http://localhost:8000";
+const server_url = "https://meetlink-backend-fqky.onrender.com";
 
 var connections = {};
 
